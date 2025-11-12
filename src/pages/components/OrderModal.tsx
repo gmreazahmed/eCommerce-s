@@ -1,65 +1,98 @@
 import React, { useState } from 'react'
-import { collection, addDoc } from 'firebase/firestore'
-import { db, firebaseServerTimestamp } from '../../firebase'
-import dayjs from 'dayjs'
-import utc from 'dayjs/plugin/utc'
-import timezone from 'dayjs/plugin/timezone'
-import { fbTrack } from '../../facebook-pixel'
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import { db } from "../../firebase"
+import toast from 'react-hot-toast'
 
-dayjs.extend(utc)
-dayjs.extend(timezone)
+export default function OrderModal({ product, onClose }) {
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [address, setAddress] = useState('')
+  const [quantity, setQuantity] = useState(1)
+  const [loading, setLoading] = useState(false)
 
-export default function OrderModal({ product, onClose }:{product:any,onClose:()=>void}){
-  const [quantity,setQuantity] = useState<number>(1)
-  const [name,setName] = useState('')
-  const [phone,setPhone] = useState('')
-  const [address,setAddress] = useState('')
-  const [busy,setBusy] = useState(false)
-  const [message,setMessage] = useState('')
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setLoading(true)
 
-  async function placeOrder(){
-    if (!name || !phone || !address) { alert('Please fill name, phone and address'); return }
-    setBusy(true)
-    try{
-      const dhakaNow = dayjs().tz('Asia/Dhaka').format('YYYY-MM-DD HH:mm:ss')
-      const docRef = await addDoc(collection(db,'orders'),{
-        productId: product.id,
+    try {
+      await addDoc(collection(db, 'orders'), {
         productTitle: product.title,
-        price: product.price,
         quantity,
-        name, phone, address,
-        status: 'pending',
-        createdAt: firebaseServerTimestamp(),
-        date_local_dhaka: dhakaNow
+        name,
+        phone,
+        address,
+        createdAt: serverTimestamp(),
+        status: 'pending'
       })
-      const total = product.price * quantity
-      try { fbTrack('Purchase', { value: total, currency: 'BDT', content_ids: [product.id], content_name: product.title }) } catch(e){}
-      setMessage('Order placed. ID: ' + docRef.id)
-      setTimeout(()=>{ onClose() }, 1200)
-    }catch(err){
+
+      // ✅ SUCCESS POPUP
+      toast.success('✅ ধন্যবাদ! আপনার অর্ডার সফলভাবে জমা হয়েছে 🎉')
+
+      // form clear + modal বন্ধ
+      setName('')
+      setPhone('')
+      setAddress('')
+      setQuantity(1)
+      onClose()
+
+    } catch (err) {
       console.error(err)
-      alert('Failed to place order')
-    }finally{ setBusy(false) }
+      toast.error('❌ অর্ডার ব্যর্থ হয়েছে, আবার চেষ্টা করুন!')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-end md:items-center justify-center p-4">
-      <div className="bg-white rounded-xl w-full md:w-2/3 p-6">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-semibold">Order — {product.title}</h3>
-          <button onClick={onClose} className="text-gray-500">✕</button>
-        </div>
-        <div className="mt-4 grid gap-3">
-          <input type="number" min={1} value={quantity} onChange={e=>setQuantity(Number(e.target.value))} className="border px-3 py-2 rounded" />
-          <input placeholder="Full name" value={name} onChange={e=>setName(e.target.value)} className="border px-3 py-2 rounded" />
-          <input placeholder="Phone" value={phone} onChange={e=>setPhone(e.target.value)} className="border px-3 py-2 rounded" />
-          <textarea placeholder="Address" value={address} onChange={e=>setAddress(e.target.value)} className="border px-3 py-2 rounded" />
-          <div className="flex gap-3">
-            <button onClick={placeOrder} disabled={busy} className="btn">Place Order</button>
-            <button onClick={onClose} className="btn-ghost">Cancel</button>
-          </div>
-          {message && <p className="text-green-600">{message}</p>}
-        </div>
+    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-xl w-[90%] max-w-md shadow-lg">
+        <h2 className="text-xl font-bold mb-4">অর্ডার করুন</h2>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <input
+            required
+            type="text"
+            placeholder="আপনার নাম"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="input input-bordered w-full"
+          />
+          <input
+            required
+            type="tel"
+            placeholder="মোবাইল নাম্বার"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="input input-bordered w-full"
+          />
+          <textarea
+            required
+            placeholder="ঠিকানা"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            className="textarea textarea-bordered w-full"
+          ></textarea>
+
+          <input
+            type="number"
+            min="1"
+            value={quantity}
+            onChange={(e) => setQuantity(Number(e.target.value))}
+            className="input input-bordered w-full"
+          />
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn btn-primary w-full mt-4"
+          >
+            {loading ? 'অর্ডার হচ্ছে...' : 'অর্ডার সাবমিট করুন'}
+          </button>
+        </form>
+
+        <button onClick={onClose} className="mt-3 text-sm text-gray-500">
+          বন্ধ করুন
+        </button>
       </div>
     </div>
   )

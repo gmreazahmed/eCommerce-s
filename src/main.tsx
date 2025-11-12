@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './index.css'
 import { initFacebookPixel } from './facebook-pixel'
+import { Toaster } from 'react-hot-toast'
 
 initFacebookPixel()
 
@@ -13,6 +14,7 @@ root.render(
   <React.StrictMode>
     <BrowserRouter>
       <App />
+      <Toaster position="top-center" reverseOrder={false} />
     </BrowserRouter>
   </React.StrictMode>
 )
