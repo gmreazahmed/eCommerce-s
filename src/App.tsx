@@ -3,12 +3,12 @@ import { Routes, Route, Link } from 'react-router-dom'
 import ProductPage from './pages/ProductPage'
 import AdminPage from './pages/AdminPage'
 
-export default function App(){
+export default function App() {
   return (
-    <div className="min-h-screen flex flex-col">
- 
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      {/* Main Content */}
       <main className="flex-1 py-8">
-        <div className="container">
+        <div className="container mx-auto px-4">
           <Routes>
             <Route path="/" element={<ProductPage />} />
             <Route path="/admin/*" element={<AdminPage />} />
@@ -16,9 +16,28 @@ export default function App(){
         </div>
       </main>
 
-      {/* <footer className="bg-white border-t py-4">
-        <div className="container text-center text-sm text-gray-500">© {new Date().getFullYear()} bdz-ecommerce</div>
-      </footer> */}
+      {/* 🌈 Elegant Footer */}
+      <footer className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white mt-10 shadow-inner">
+        <div className="container mx-auto px-4 py-6 flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left">
+          {/* Left side */}
+          <p className="text-sm">
+            © {new Date().getFullYear()} <span className="font-semibold">bdz-ecommerce</span> — All rights reserved.
+          </p>
+
+          {/* Right side */}
+          <p className="text-sm">
+            Developed by{" "}
+            <a
+              href="https://www.gmreaz.site/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-yellow-300 hover:text-white transition duration-200"
+            >
+              GM Reaz
+            </a>
+          </p>
+        </div>
+      </footer>
     </div>
   )
 }

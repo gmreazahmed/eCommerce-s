@@ -201,7 +201,7 @@ export default function OrderModal({
           <form onSubmit={handleSubmit} className="p-6 space-y-4 bg-white">
             {/* Quantity */}
             <div>
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-200">পরিমাণ</label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-200">পরিমাণ </label>
               <div className="mt-2 inline-flex items-center border rounded-lg overflow-hidden">
                 <button
                   type="button"
