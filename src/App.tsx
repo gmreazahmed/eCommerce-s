@@ -9,7 +9,6 @@ export default function App(){
       <header className="bg-blue-600 text-white">
         <div className="container flex items-center justify-between py-4">
           <h1 className="text-lg font-semibold">E-ecommerce</h1>
-          
         </div>
       </header>
 
