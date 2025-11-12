@@ -3,12 +3,7 @@ import { addDoc, collection, serverTimestamp } from "firebase/firestore"
 import { db } from "../../firebase"
 import toast from "react-hot-toast"
 
-/**
- * Optional confetti: dynamically import react-confetti if available.
- * This avoids runtime error when package is not installed.
- */
-type ConfettiCompType = React.ComponentType<any> | null
-
+/** price parsing helper (handles Bangla digits & symbols) */
 function parsePriceToNumber(val: any) {
   if (val == null) return 0
   if (typeof val === "number") return val
@@ -41,40 +36,23 @@ export default function OrderModal({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const nameRef = useRef<HTMLInputElement | null>(null)
 
-  // thank-you popup state
+  // thank-you popup state (only this will show on success)
   const [showThanks, setShowThanks] = useState(false)
-  // confetti component if available
-  const [ConfettiComp, setConfettiComp] = useState<ConfettiCompType>(null)
 
-  // compute prices
+  // compute numeric prices
   const unitPrice = parsePriceToNumber(product?.price)
   const totalPrice = unitPrice * (Number(quantity) || 0)
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n)
 
   useEffect(() => {
-    // focus name input slightly after mount
     setTimeout(() => nameRef.current?.focus(), 40)
-
-    // prevent background scrolling
     const prev = document.body.style.overflow
     document.body.style.overflow = "hidden"
-
-    // ESC to close
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose?.()
-      }
+      if (e.key === "Escape") onClose?.()
     }
     window.addEventListener("keydown", onKey)
-
-    // try to dynamically import react-confetti (optional)
-    import("react-confetti")
-      .then((mod) => setConfettiComp(() => mod.default))
-      .catch(() => {
-        /* ignore if not installed */
-      })
-
     return () => {
       document.body.style.overflow = prev
       window.removeEventListener("keydown", onKey)
@@ -111,14 +89,11 @@ export default function OrderModal({
         status: "pending",
       })
 
-      // show inline success toast quickly
-      toast.success("✅ অর্ডার জমা হয়েছে")
-
-      // show animated thank-you popup with confetti
+      // DON'T show toast.success here — we show only the thank-you popup
       setShowThanks(true)
 
-      // notify serverless backend (optional) - non-blocking
-      (async () => {
+      // notify backend (non-blocking)
+      ;(async () => {
         try {
           const notifyUrl = (import.meta.env as any).VITE_NOTIFY_URL || "/api/notify"
           await fetch(notifyUrl, {
@@ -140,13 +115,13 @@ export default function OrderModal({
         }
       })()
 
-      // clear form (but keep thank you visible a moment)
+      // clear form fields
       setName("")
       setPhone("")
       setAddress("")
       setQuantity(1)
 
-      // auto close thank-you after 3s and then close modal
+      // auto close thank-you popup after 3.2s and then close modal
       setTimeout(() => {
         setShowThanks(false)
         onClose?.()
@@ -315,7 +290,6 @@ export default function OrderModal({
       {showThanks && (
         <>
           <div className="fixed inset-0 z-[60] flex items-center justify-center pointer-events-none">
-            {/* dim background */}
             <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
             <div className="relative z-10 pointer-events-auto max-w-sm w-[90%] mx-auto">
               <div className="bg-white rounded-2xl p-6 shadow-2xl text-center animate-pop">
@@ -337,15 +311,8 @@ export default function OrderModal({
                 </div>
               </div>
             </div>
-
-            {/* optional confetti */}
-            {ConfettiComp ? (
-              // ConfettiComp is dynamically imported component
-              <ConfettiComp width={typeof window !== "undefined" ? window.innerWidth : 800} height={typeof window !== "undefined" ? window.innerHeight : 600} recycle={false} numberOfPieces={180} />
-            ) : null}
           </div>
 
-          {/* Small CSS keyframes for pop animation (inline via style tag) */}
           <style>{`
             @keyframes popIn {
               0% { transform: scale(.9); opacity: 0 }
