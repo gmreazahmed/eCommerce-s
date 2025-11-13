@@ -11,7 +11,7 @@ import {
   updateDoc
 } from 'firebase/firestore'
 
-// Helper functions for CSV export
+// CSV helpers
 function escapeCsvCell(value: any) {
   if (value === null || value === undefined) return ''
   const s = value.toString()
@@ -38,44 +38,24 @@ export default function AdminPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'confirmed'>('all')
 
-  // Date filter (yyyy-mm-dd strings)
+  // Date filter
   const [dateFrom, setDateFrom] = useState<string>('')
   const [dateTo, setDateTo] = useState<string>('')
 
-  // dark mode
-  const [dark, setDark] = useState<boolean>(false)
-
-  // notification sound audio ref
+  // audio for new orders (kept minimal)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  // track previous orders count for notification
   const prevCountRef = useRef<number>(0)
 
-  // debounce search
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300)
     return () => clearTimeout(t)
   }, [searchTerm])
 
-  // init audio
   useEffect(() => {
-    audioRef.current = new Audio(
-      // short click sound (base64 small beep) — avoids external asset
-      'data:audio/mp3;base64,SUQzAwAAAAAAJ1RySUQzAwAAAAAA'
-    )
-    // above is an empty stub base64; browsers may not play it — so better to create a small oscillator fallback when needed
-    return () => {
-      audioRef.current = null
-    }
+    // small silent audio stub (okay if cannot play)
+    audioRef.current = new Audio('data:audio/mp3;base64,SUQzAwAAAAAAJ1RySUQzAwAAAAAA')
+    return () => { audioRef.current = null }
   }, [])
-
-  // persist dark mode to localStorage & apply to document
-  useEffect(() => {
-    try {
-      localStorage.setItem('bdz_dark', dark ? '1' : '0')
-    } catch {}
-    if (dark) document.documentElement.classList.add('dark')
-    else document.documentElement.classList.remove('dark')
-  }, [dark])
 
   async function login(e?: React.FormEvent) {
     e?.preventDefault()
@@ -142,33 +122,25 @@ export default function AdminPage() {
     return () => unsub()
   }, [])
 
-  // helper: normalize createdAt to Date
   function getCreatedDate(o: any): Date | null {
     const v = o?.createdAt
     if (!v) return null
-    // Firestore Timestamp has toDate()
     if (v?.toDate && typeof v.toDate === 'function') return v.toDate()
-    // if it's ISO string
     if (typeof v === 'string') {
       const d = new Date(v)
       return isNaN(d.getTime()) ? null : d
     }
-    // if it's seconds/nanoseconds object
-    if (v?.seconds) {
-      return new Date(v.seconds * 1000)
-    }
-    // Date already
+    if (v?.seconds) return new Date(v.seconds * 1000)
     if (v instanceof Date) return v
     return null
   }
 
-  // Filtering with search, status, and date range
   const filteredOrders = useMemo(() => {
     const s = debouncedSearch.toLowerCase()
     return orders.filter((o) => {
       if (statusFilter !== 'all' && o.status !== statusFilter) return false
 
-      // date filter
+      // date range
       const d = getCreatedDate(o)
       if (dateFrom) {
         const from = new Date(dateFrom + 'T00:00:00')
@@ -190,7 +162,6 @@ export default function AdminPage() {
     })
   }, [orders, debouncedSearch, statusFilter, dateFrom, dateTo])
 
-  // notification: play sound when new orders arrived (count increases)
   useEffect(() => {
     const prev = prevCountRef.current
     const curr = orders.length
@@ -199,38 +170,16 @@ export default function AdminPage() {
       return
     }
     if (curr > prev) {
-      // play beep — try audio element first; fallback to oscillator
       const audio = audioRef.current
-      let played = false
       if (audio) {
-        try {
-          audio.currentTime = 0
-          audio.play()?.then(() => { }).catch(() => { })
-          played = true
-        } catch {}
-      }
-      if (!played && typeof window.AudioContext !== 'undefined') {
-        try {
-          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-          const o = ctx.createOscillator()
-          const g = ctx.createGain()
-          o.type = 'sine'
-          o.frequency.value = 880
-          o.connect(g)
-          g.connect(ctx.destination)
-          g.gain.value = 0.05
-          o.start()
-          setTimeout(() => {
-            o.stop()
-            try { ctx.close() } catch {}
-          }, 200)
-        } catch {}
+        audio.currentTime = 0
+        audio.play?.().catch(()=>{})
       }
     }
     prevCountRef.current = curr
   }, [orders])
 
-  // CSV columns
+  // CSV columns & export
   const csvColumns = [
     { key: 'id', label: 'Order ID' },
     { key: 'productTitle', label: 'Product' },
@@ -255,29 +204,6 @@ export default function AdminPage() {
     URL.revokeObjectURL(url)
   }
 
-  async function copyCsvToClipboard(rows: any[]) {
-    const csv = toCsv(rows, csvColumns)
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(csv)
-        alert('CSV copied to clipboard — এখন Google Sheets এ গিয়ে Ctrl+V করুন।')
-      } else {
-        window.prompt('Copy CSV below (Ctrl+C):', csv)
-      }
-    } catch {
-      window.prompt('Copy CSV below (Ctrl+C):', csv)
-    }
-  }
-
-  async function openInGoogleSheets(rows: any[]) {
-    await copyCsvToClipboard(rows)
-    window.open('https://docs.google.com/spreadsheets/u/0/', '_blank')
-    setTimeout(() => {
-      alert('Google Sheets খুলেছে ✅ এখন A1 সেলে গিয়ে Ctrl+V দিন।')
-    }, 500)
-  }
-
-  // small helper to show readable createdAt
   function formatCreated(o: any) {
     const d = getCreatedDate(o)
     if (!d) return ''
@@ -290,156 +216,105 @@ export default function AdminPage() {
   const confirmedCount = orders.filter((o) => o.status === 'confirmed').length
 
   return (
-    <div className="h-screen w-full bg-gray-100 overflow-hidden">
-      <div className="h-full w-full flex flex-col">
-        {/* STICKY header with gradient */}
-        <header className="sticky top-0 z-50 bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-500 text-white shadow-md">
-          <div className="w-full px-3 md:px-6 py-3 max-w-full flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-            <div>
-              <h1 className="text-lg md:text-2xl font-extrabold tracking-tight flex items-center gap-2">
-                Orders Dashboard
-              </h1>
-              <p className="text-xs md:text-sm opacity-90 mt-1">
-                Total: <b>{totalCount}</b> · Pending: <b>{pendingCount}</b> · Confirmed: <b>{confirmedCount}</b>
-              </p>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Header */}
+        <header className="relative rounded-xl bg-white shadow-md p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          {/* Top-right Logout (always in corner) */}
+          <div className="absolute right-4 top-4 z-20">
+            <button onClick={logout} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium">
+              Logout
+            </button>
+          </div>
+
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Orders Dashboard</h1>
+            <p className="text-sm text-gray-600 mt-1">
+              Total: <b>{totalCount}</b> · Pending: <b>{pendingCount}</b> · Confirmed: <b>{confirmedCount}</b>
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 bg-gray-100 rounded px-3 py-1 text-sm">
+              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"></path>
+              </svg>
+              <input
+                placeholder="Search product / name / phone"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="bg-transparent outline-none w-44 md:w-64 placeholder-gray-500 text-sm text-gray-700"
+              />
+              {searchTerm && (<button onClick={() => setSearchTerm('')} className="text-sm text-gray-500">✕</button>)}
             </div>
 
-            {user && (
-              <div className="flex flex-wrap justify-end gap-2 w-full md:w-auto items-center">
-                {/* search */}
-                <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm border border-white/30 rounded px-3 py-1.5 text-sm">
-                  <svg className="w-4 h-4 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"></path>
-                  </svg>
-                  <input
-                    placeholder="Search product / name / phone"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="bg-transparent outline-none w-36 md:w-56 placeholder-white/80 text-white text-sm"
-                  />
-                  {searchTerm && (
-                    <button
-                      onClick={() => setSearchTerm('')}
-                      className="text-white/80 hover:text-white text-xs"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="px-3 py-1 rounded border text-sm bg-white text-gray-700"
+            >
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="confirmed">Confirmed</option>
+            </select>
 
-                {/* status */}
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as any)}
-                  className="bg-white text-gray-800 px-3 py-1.5 rounded border border-gray-300 text-sm font-medium"
-                >
-                  <option value="all">All</option>
-                  <option value="pending">Pending</option>
-                  <option value="confirmed">Confirmed</option>
-                </select>
+            <div className="flex items-center gap-2 bg-white rounded px-2 py-1 text-sm border">
+              <label className="text-xs text-gray-600 mr-1">From</label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="text-sm rounded px-2 py-1 outline-none"
+              />
+              <label className="text-xs text-gray-600 ml-2 mr-1">To</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="text-sm rounded px-2 py-1 outline-none"
+              />
+              <button onClick={() => { setDateFrom(''); setDateTo('') }} className="ml-2 text-xs underline text-gray-600">Clear</button>
+            </div>
 
-                {/* date range */}
-                <div className="flex items-center gap-2 bg-white/10 rounded px-2 py-1 text-sm">
-                  <label className="text-xs opacity-90 mr-1">From</label>
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    className="text-sm rounded px-2 py-1 outline-none"
-                  />
-                  <label className="text-xs opacity-90 ml-2 mr-1">To</label>
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    className="text-sm rounded px-2 py-1 outline-none"
-                  />
-                  <button
-                    onClick={() => { setDateFrom(''); setDateTo('') }}
-                    className="ml-2 text-xs underline"
-                    title="Clear dates"
-                  >
-                    Clear
-                  </button>
-                </div>
+            <button onClick={fetchOrders} className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 rounded text-sm text-blue-700">Refresh</button>
 
-                {/* Refresh / Logout */}
-                <button
-                  onClick={fetchOrders}
-                  className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded text-sm font-medium"
-                >
-                  Refresh
-                </button>
+            <button onClick={() => downloadCsv(filteredOrders)} className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded text-sm font-semibold">CSV ⬇️</button>
 
-                <button
-                  onClick={logout}
-                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium"
-                >
-                  Logout
-                </button>
-
-                {/* CSV */}
-                <button
-                  onClick={() => downloadCsv(filteredOrders)}
-                  className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded text-sm font-semibold"
-                >
-                  CSV ⬇️
-                </button>
-
-                <button
-                  onClick={() => openInGoogleSheets(filteredOrders)}
-                  className="px-3 py-1.5 bg-yellow-400 hover:bg-yellow-500 text-gray-900 rounded text-sm font-semibold"
-                >
-                  Google Sheets 📊
-                </button>
-
-                {/* Dark mode */}
-                <button
-                  onClick={() => setDark(d => !d)}
-                  className="px-2 py-1 bg-white/20 hover:bg-white/30 rounded flex items-center gap-2 text-sm"
-                  title="Toggle dark mode"
-                >
-                  {dark ? '🌙 Dark' : '☀️ Light'}
-                </button>
-              </div>
-            )}
+            {/* removed other logout buttons - single corner logout only */}
           </div>
         </header>
 
-        {/* main content */}
-        <main className="flex-1 overflow-auto">
-          <div className="w-full p-4 md:p-6">
-            {!user ? (
-              <div className="flex justify-center items-center h-[70vh]">
-                <div className="w-full max-w-md p-6 bg-white rounded-lg shadow">
-                  <h2 className="text-xl font-semibold mb-4 text-center">Admin Login</h2>
-                  <form onSubmit={login} className="grid gap-3">
-                    <input
-                      type="email"
-                      placeholder="Admin Email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="border px-3 py-2 rounded"
-                    />
-                    <input
-                      type="password"
-                      placeholder="Password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="border px-3 py-2 rounded"
-                    />
-                    <button
-                      disabled={busy}
-                      className="bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
-                    >
-                      {busy ? 'Logging in...' : 'Login'}
-                    </button>
-                  </form>
-                </div>
+        {/* Main table */}
+        <main className="mt-6">
+          {!user ? (
+            <div className="flex items-center justify-center h-[60vh]">
+              <div className="w-full max-w-md p-6 bg-white rounded-lg shadow">
+                <h2 className="text-xl font-semibold mb-4 text-center">Admin Login</h2>
+                <form onSubmit={login} className="grid gap-3">
+                  <input
+                    type="email"
+                    placeholder="Admin Email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="border px-3 py-2 rounded"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="border px-3 py-2 rounded"
+                  />
+                  <button disabled={busy} className="bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+                    {busy ? 'Logging in...' : 'Login'}
+                  </button>
+                </form>
               </div>
-            ) : (
-              <div className="bg-white w-full rounded-lg shadow border border-gray-200 overflow-hidden">
-                <table className="min-w-full text-sm md:text-base border-collapse">
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm md:text-base">
                   <thead className="bg-gray-50 border-b">
                     <tr className="text-left text-gray-700">
                       <th className="py-3 px-4">Product</th>
@@ -455,7 +330,7 @@ export default function AdminPage() {
                     {filteredOrders.map((o) => (
                       <tr key={o.id} className="hover:bg-gray-50">
                         <td className="py-3 px-4">
-                          <div className="font-medium">{o.productTitle}</div>
+                          <div className="font-medium text-gray-900">{o.productTitle}</div>
                           <div className="text-xs text-gray-500 mt-1">{formatCreated(o)}</div>
                         </td>
                         <td className="py-3 px-4">{o.quantity}</td>
@@ -463,24 +338,16 @@ export default function AdminPage() {
                         <td className="py-3 px-4">{o.phone}</td>
                         <td className="py-3 px-4 whitespace-pre-wrap break-words">{o.address}</td>
                         <td className="py-3 px-4">
-                          <span
-                            className={`px-2 py-1 rounded-full text-sm font-semibold ${
-                              o.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-                            }`}
-                          >
+                          <span className={`px-2 py-1 rounded-full text-sm font-semibold ${o.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
                             {o.status}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-center">
                           <div className="flex justify-center gap-2">
                             {o.status !== 'confirmed' && (
-                              <button onClick={() => confirmOrder(o.id)} className="bg-green-600 text-white px-3 py-1 rounded text-sm">
-                                Confirm
-                              </button>
+                              <button onClick={() => confirmOrder(o.id)} className="bg-green-600 text-white px-3 py-1 rounded text-sm">Confirm</button>
                             )}
-                            <button onClick={() => removeOrder(o.id)} className="bg-red-600 text-white px-3 py-1 rounded text-sm">
-                              Delete
-                            </button>
+                            <button onClick={() => removeOrder(o.id)} className="bg-red-600 text-white px-3 py-1 rounded text-sm">Delete</button>
                           </div>
                         </td>
                       </tr>
@@ -495,11 +362,11 @@ export default function AdminPage() {
                   </tbody>
                 </table>
               </div>
-            )}
-
-            <div className="mt-4 text-sm text-gray-600">
-              Showing <b>{shownCount}</b> of <b>{totalCount}</b> orders.
             </div>
+          )}
+
+          <div className="mt-4 text-sm text-gray-600">
+            Showing <b>{shownCount}</b> of <b>{totalCount}</b> orders.
           </div>
         </main>
       </div>
@@ -507,7 +374,7 @@ export default function AdminPage() {
   )
 }
 
-// helper function moved here to keep file complete
+// helper function
 function formatCreated(o: any) {
   const v = o?.createdAt
   if (!v) return ''

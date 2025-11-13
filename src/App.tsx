@@ -21,7 +21,7 @@ export default function App() {
         <div className="container mx-auto px-4 py-6 flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left">
           {/* Left side */}
           <p className="text-sm">
-            © {new Date().getFullYear()} <span className="font-semibold">bdz-ecommerce</span> — All rights reserved.
+            © {new Date().getFullYear()} <span className="font-semibold">eCommerce S</span> — All rights reserved.
           </p>
 
           {/* Right side */}
